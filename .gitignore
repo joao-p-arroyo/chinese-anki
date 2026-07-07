@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Cloudflare Wrangler local states and caches
+.wrangler/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# OS clutter
+.DS_Store
+Thumbs.db

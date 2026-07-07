@@ -1,0 +1,9 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "hsk-anki-backend"
+main = "index.js"
+compatibility_date = "2026-07-07"
+
+[[d1_databases]]
+binding = "DB" # Keep this as "DB" so it matches 'env.DB' in the index.js code
+database_name = "hsk-db"
+database_id = "4c70c545-60ed-4601-88ad-44a3d7c2d916"
