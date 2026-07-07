@@ -115,22 +115,31 @@
         let appProgress = JSON.parse(localStorage.getItem('hsk_progress')) || {};
         let currentCard = null;
 
-        function init() {
-            // Build settings UI checks dynamically
-            document.getElementById('setting-pinyin').checked = appSettings.showPinyin;
-            const filterBox = document.getElementById('hsk-filters');
-            filterBox.innerHTML = '';
-            [1, 2, 3, 4, 5, 6].forEach(lvl => {
-                const btn = document.createElement('button');
-                btn.innerText = `HSK ${lvl}`;
-                btn.id = `btn-hsk-${lvl}`;
-                btn.className = `p-2 rounded-xl text-xs font-semibold border transition-all ${appSettings.hsk.includes(lvl) ? 'bg-indigo-100 border-indigo-400 text-indigo-700' : 'bg-white text-slate-500'}`;
-                btn.onclick = () => toggleHskLevel(lvl);
-                filterBox.appendChild(btn);
-            });
+        async function init() {
+            try {
+                // Fetch the generated vocabulary list relative to your page directory
+                const response = await fetch('../characters/hsk1.json');
+                HSK_DICTIONARY = await response.json();
 
-            checkAuthStatus();
-            drawNextCard();
+                // Build settings UI checks dynamically
+                document.getElementById('setting-pinyin').checked = appSettings.showPinyin;
+                const filterBox = document.getElementById('hsk-filters');
+                filterBox.innerHTML = '';
+
+                [1].forEach(lvl => { // Currently setting up level 1
+                    const btn = document.createElement('button');
+                    btn.innerText = `HSK ${lvl}`;
+                    btn.id = `btn-hsk-${lvl}`;
+                    btn.className = `p-2 rounded-xl text-xs font-semibold border transition-all ${appSettings.hsk.includes(lvl) ? 'bg-indigo-100 border-indigo-400 text-indigo-700' : 'bg-white text-slate-500'}`;
+                    btn.onclick = () => toggleHskLevel(lvl);
+                    filterBox.appendChild(btn);
+                });
+
+                checkAuthStatus();
+                drawNextCard();
+            } catch (err) {
+                console.error("Failed to load HSK Dictionary file:", err);
+            }
         }
 
         function toggleView(view) {
