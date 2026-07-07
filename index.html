@@ -96,12 +96,16 @@
         Anki-HSK Engine running locally/distributed.
     </footer>
 
-    <script>        
+    <script>
         let HSK_DICTIONARY = [];
         const API_URL = "https://hsk-anki-backend.joao-p-arroyo.workers.dev";
 
         // State initialization
-        let appSettings = JSON.parse(localStorage.getItem('hsk_settings')) || { hsk: [1], showPinyin: true };
+        let appSettings = JSON.parse(localStorage.getItem('hsk_settings')) || {
+            hsk: [1],
+            blocks: [1], // Track active sub-blocks for level 1
+            showPinyin: true
+        };
         let appProgress = JSON.parse(localStorage.getItem('hsk_progress')) || {};
         let currentCard = null;
 
@@ -109,35 +113,67 @@
             try {
                 const response = await fetch('./characters/hsk1.json');
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-                // This will now work perfectly because HSK_DICTIONARY is a 'let' variable!
                 HSK_DICTIONARY = await response.json();
 
-                // Build settings UI checks dynamically
                 document.getElementById('setting-pinyin').checked = appSettings.showPinyin;
                 const filterBox = document.getElementById('hsk-filters');
                 filterBox.innerHTML = '';
 
-                // Extract levels directly from your new JSON file
+                // 1. Identify unique levels and blocks present in our dataset
                 const uniqueLevels = [...new Set(HSK_DICTIONARY.map(item => item.level))];
 
                 uniqueLevels.forEach(lvl => {
-                    const btn = document.createElement('button');
-                    btn.innerText = `HSK ${lvl}`;
-                    btn.id = `btn-hsk-${lvl}`;
-                    btn.className = `p-2 rounded-xl text-xs font-semibold border transition-all ${appSettings.hsk.includes(lvl) ? 'bg-indigo-100 border-indigo-400 text-indigo-700' : 'bg-white text-slate-500'}`;
-                    btn.onclick = () => toggleHskLevel(lvl);
-                    filterBox.appendChild(btn);
+                    // Main Level Section Container
+                    const levelSection = document.createElement('div');
+                    levelSection.className = "col-span-3 border border-slate-100 p-4 rounded-2xl bg-slate-50/50 space-y-3";
+
+                    // Level Toggle Button Header
+                    const lvlBtn = document.createElement('button');
+                    lvlBtn.innerText = `Toggle All HSK ${lvl}`;
+                    lvlBtn.className = `w-full p-2.5 rounded-xl text-xs font-bold border transition-all ${appSettings.hsk.includes(lvl) ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs' : 'bg-white text-slate-500 border-slate-200'}`;
+                    lvlBtn.onclick = () => toggleHskLevel(lvl);
+                    levelSection.appendChild(lvlBtn);
+
+                    // Sub-grid layout container specifically for Blocks
+                    const blocksGrid = document.createElement('div');
+                    blocksGrid.className = "grid grid-cols-2 gap-2 mt-2";
+
+                    // Extract total number of blocks dynamically
+                    const uniqueBlocks = [...new Set(HSK_DICTIONARY.filter(i => i.level === lvl).map(i => i.block))].sort((a, b) => a - b);
+
+                    uniqueBlocks.forEach(blk => {
+                        const blkBtn = document.createElement('button');
+                        blkBtn.innerText = `Block ${blk} (Words ${(blk - 1) * 30 + 1}-${Math.min(blk * 30, HSK_DICTIONARY.filter(i => i.block === blk).length + (blk - 1) * 30)})`;
+                        blkBtn.className = `p-2 rounded-xl text-center text-[11px] font-medium border transition-all ${appSettings.blocks?.includes(blk) && appSettings.hsk.includes(lvl) ? 'bg-emerald-100 border-emerald-400 text-emerald-800' : 'bg-white text-slate-400 border-slate-200'}`;
+                        blkBtn.onclick = () => toggleBlock(blk);
+                        blocksGrid.appendChild(blkBtn);
+                    });
+
+                    levelSection.appendChild(blocksGrid);
+                    filterBox.appendChild(levelSection);
                 });
 
                 checkAuthStatus();
                 drawNextCard();
             } catch (err) {
                 console.error("Failed to load HSK Dictionary file:", err);
-                // Fallback to clear screen error message if path fails
                 document.getElementById('character-display').innerText = "⚠️";
                 document.getElementById('pinyin-display').innerText = "Error loading vocabulary data";
             }
+        }
+
+        function toggleBlock(blockNum) {
+            if (!appSettings.blocks) appSettings.blocks = [];
+
+            if (appSettings.blocks.includes(blockNum)) {
+                // Prevent turning off everything if it's the last block remaining
+                if (appSettings.blocks.length > 1) {
+                    appSettings.blocks = appSettings.blocks.filter(b => b !== blockNum);
+                }
+            } else {
+                appSettings.blocks.push(blockNum);
+            }
+            updateSettings();
         }
 
         function toggleView(view) {
@@ -168,12 +204,15 @@
 
         // Spaced Repetition Scheduling Parser
         function drawNextCard() {
-            // 1. Filter raw dictionary down to the user's active HSK levels
-            let pool = HSK_DICTIONARY.filter(item => appSettings.hsk.includes(item.level));
+            // UPDATED FILTER: Filter by active HSK Level AND active Block numbers
+            let pool = HSK_DICTIONARY.filter(item =>
+                appSettings.hsk.includes(item.level) &&
+                (appSettings.blocks ? appSettings.blocks.includes(item.block) : true)
+            );
 
             if (!pool.length) {
                 document.getElementById('character-display').innerText = "📭";
-                document.getElementById('pinyin-display').innerText = "No active levels selected";
+                document.getElementById('pinyin-display').innerText = "No active levels/blocks selected";
                 document.getElementById('options-grid').innerHTML = '';
                 return;
             }
