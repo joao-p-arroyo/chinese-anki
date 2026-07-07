@@ -96,38 +96,29 @@
         Anki-HSK Engine running locally/distributed.
     </footer>
 
-    <script>
-        // Minimal Mock Seed Database representing subsets of HSK1, 2 and 3 levels
-        const HSK_DICTIONARY = [
-            { id: "1_1", char: "我", pinyin: "wǒ", meaning: "I, me", level: 1 },
-            { id: "1_2", char: "你", pinyin: "nǐ", meaning: "You", level: 1 },
-            { id: "1_3", char: "好", pinyin: "hǎo", meaning: "Good / Well", level: 1 },
-            { id: "2_1", char: "咖啡", pinyin: "kāfēi", meaning: "Coffee", level: 2 },
-            { id: "2_2", char: "跑步", pinyin: "pǎobù", meaning: "To run", level: 2 },
-            { id: "3_1", char: "办法", pinyin: "bànfǎ", meaning: "Method / Way", level: 3 },
-            { id: "3_2", char: "阿姨", pinyin: "āyí", meaning: "Auntie", level: 3 }
-        ];
-
-        const API_URL = "https://hsk-anki-backend.joao-p-arroyo.workers.dev"; // Adjusted target based on CloudFlare Deployment.
+    <script>        
+        let HSK_DICTIONARY = [];
+        const API_URL = "https://hsk-anki-backend.joao-p-arroyo.workers.dev";
 
         // State initialization
-        let appSettings = JSON.parse(localStorage.getItem('hsk_settings')) || { hsk: [1, 2, 3], showPinyin: true };
+        let appSettings = JSON.parse(localStorage.getItem('hsk_settings')) || { hsk: [1], showPinyin: true };
         let appProgress = JSON.parse(localStorage.getItem('hsk_progress')) || {};
         let currentCard = null;
 
         async function init() {
             try {
-                // Fetch the generated vocabulary list relative to your page directory
                 const response = await fetch('../characters/hsk1.json');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+                // This will now work perfectly because HSK_DICTIONARY is a 'let' variable!
                 HSK_DICTIONARY = await response.json();
-                console.log("Loaded characters count:", HSK_DICTIONARY.length);
 
                 // Build settings UI checks dynamically
                 document.getElementById('setting-pinyin').checked = appSettings.showPinyin;
                 const filterBox = document.getElementById('hsk-filters');
                 filterBox.innerHTML = '';
 
-                // Generate filters for any level found in your dynamic dictionary file
+                // Extract levels directly from your new JSON file
                 const uniqueLevels = [...new Set(HSK_DICTIONARY.map(item => item.level))];
 
                 uniqueLevels.forEach(lvl => {
@@ -143,6 +134,9 @@
                 drawNextCard();
             } catch (err) {
                 console.error("Failed to load HSK Dictionary file:", err);
+                // Fallback to clear screen error message if path fails
+                document.getElementById('character-display').innerText = "⚠️";
+                document.getElementById('pinyin-display').innerText = "Error loading vocabulary data";
             }
         }
 
