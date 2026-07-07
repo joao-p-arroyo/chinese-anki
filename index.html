@@ -107,7 +107,7 @@
 
         async function init() {
             try {
-                const response = await fetch('../characters/hsk1.json');
+                const response = await fetch('./characters/hsk1.json');
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
                 // This will now work perfectly because HSK_DICTIONARY is a 'let' variable!
