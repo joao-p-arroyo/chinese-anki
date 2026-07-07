@@ -120,13 +120,17 @@
                 // Fetch the generated vocabulary list relative to your page directory
                 const response = await fetch('../characters/hsk1.json');
                 HSK_DICTIONARY = await response.json();
+                console.log("Loaded characters count:", HSK_DICTIONARY.length);
 
                 // Build settings UI checks dynamically
                 document.getElementById('setting-pinyin').checked = appSettings.showPinyin;
                 const filterBox = document.getElementById('hsk-filters');
                 filterBox.innerHTML = '';
 
-                [1].forEach(lvl => { // Currently setting up level 1
+                // Generate filters for any level found in your dynamic dictionary file
+                const uniqueLevels = [...new Set(HSK_DICTIONARY.map(item => item.level))];
+
+                uniqueLevels.forEach(lvl => {
                     const btn = document.createElement('button');
                     btn.innerText = `HSK ${lvl}`;
                     btn.id = `btn-hsk-${lvl}`;
