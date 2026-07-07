@@ -4,36 +4,41 @@ const fs = require('fs');
 async function getHSK1() {
   console.log("📥 Fetching a clean HSK dataset...");
   try {
-    // Using a rock-solid, structured complete-hsk vocabulary repository
     const response = await fetch('https://raw.githubusercontent.com/drkameleon/complete-hsk-vocabulary/master/wordlists/exclusive/old/1.json');
-    
-    // Read response as text first to avoid parser failures if headers contain unexpected data
     const rawText = await response.text();
-    const cleanText = rawText.trim();
-    const data = JSON.parse(cleanText);
+    const data = JSON.parse(rawText.trim());
     
-    // Map data to match your application's explicit schema
     const formatted = data.map((item, index) => {
-      // Extract definitions cleanly, cleaning up long texts or arrays if necessary
-      let meaning = "";
-      if (Array.isArray(item.definitions)) {
-        meaning = item.definitions.slice(0, 2).join(', ');
-      } else {
-        meaning = item.definition || "Vocabulary Word";
+      let pinyin = "";
+      let meaning = "Vocabulary Word";
+      
+      // Navigate the deeply nested structure safely
+      if (item.forms && item.forms.length > 0) {
+        const primaryForm = item.forms[0];
+        
+        // 1. Extract Pinyin
+        if (primaryForm.transcriptions && primaryForm.transcriptions.pinyin) {
+          pinyin = primaryForm.transcriptions.pinyin;
+        }
+        
+        // 2. Extract Meanings (Grab the first 2 definitions and combine them cleanly)
+        if (primaryForm.meanings && primaryForm.meanings.length > 0) {
+          meaning = primaryForm.meanings.slice(0, 2).join(', ');
+        }
       }
 
       return {
         id: `1_${index + 1}`,
         char: item.simplified || item.word,
-        pinyin: item.pinyin || "",
+        pinyin: pinyin,
         meaning: meaning,
         level: 1
       };
     });
 
-    // Write file locally
+    // Save to your dedicated folder path
     fs.writeFileSync('../characters/hsk1.json', JSON.stringify(formatted, null, 2));
-    console.log(`\n✅ Success! Created hsk1.json containing ${formatted.length} words.`);
+    console.log(`\n✅ Success! Recreated hsk1.json with ${formatted.length} fully-parsed words.`);
   } catch (error) {
     console.error("❌ Extraction failed:", error);
   }
