@@ -22,8 +22,14 @@ export default {
         const { username, password } = await request.json();
         const userId = crypto.randomUUID();
         
-        // Save user settings with the default schema structure including studyMode
-        const defaultSettings = { hsk: [1], blocks: [1], showPinyin: true, studyMode: "anki" };
+        // Save user settings with the default schema structure including hiddenMode
+        const defaultSettings = { 
+          hsk: [1], 
+          blocks: [1], 
+          showPinyin: true, 
+          studyMode: "anki",
+          hiddenMode: false 
+        };
         
         await env.DB.prepare("INSERT INTO users (id, username, password_hash, settings) VALUES (?, ?, ?, ?)")
           .bind(userId, username, password, JSON.stringify(defaultSettings)).run();

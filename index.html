@@ -19,10 +19,10 @@
         <h1 class="text-xl font-bold tracking-tight text-indigo-600">汉字 Anki-HSK</h1>
         <div class="flex items-center space-x-2">
             <button onclick="toggleView('deck')" id="nav-deck"
-                class="px-3 py-1.5 rounded-xl text-sm font-semibold bg-indigo-50 text-indigo-600 transition-all">🎴
+                class="px-3 py-1.5 rounded-xl text-sm font-semibold bg-indigo-50 text-indigo-600 transition-all cursor-pointer">🎴
                 Practice</button>
             <button onclick="toggleView('list')" id="nav-list"
-                class="px-3 py-1.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all">📊
+                class="px-3 py-1.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all cursor-pointer">📊
                 Words</button>
             <button onclick="toggleView('settings')" id="nav-settings"
                 class="p-2 rounded-full hover:bg-slate-100 transition-colors">⚙️</button>
@@ -47,8 +47,18 @@
             </div>
 
             <div class="mt-8 space-y-3">
+                <!-- Reveal Button Container (Used in Hidden Mode) -->
+                <div id="reveal-container" class="hidden">
+                    <button onclick="revealOptions()"
+                        class="w-full py-5 bg-indigo-600 text-white font-bold rounded-xl text-center shadow-xs active:scale-[0.99] transition-transform cursor-pointer text-md">
+                        Reveal Options (显示选项)
+                    </button>
+                </div>
+
+                <!-- Options Grid -->
                 <div id="options-grid" class="grid grid-cols-1 gap-3">
                 </div>
+
                 <button onclick="handleAnswer(null)"
                     class="w-full py-3 bg-slate-200 text-slate-700 font-semibold rounded-xl text-center active:scale-[0.98] transition-transform cursor-pointer">
                     Don't Know (不知道)
@@ -106,6 +116,15 @@
                 </select>
             </div>
 
+            <div class="flex justify-between items-center border-b pb-4">
+                <div>
+                    <label class="text-sm font-medium text-slate-700 block">Hidden Mode</label>
+                    <span class="text-xs text-slate-400">Hide choices until revealed to prevent elimination guessing</span>
+                </div>
+                <input type="checkbox" id="setting-hidden-mode" onchange="updateSettings()"
+                    class="w-5 h-5 accent-indigo-600 cursor-pointer">
+            </div>
+
             <div class="flex justify-between items-center">
                 <label class="text-sm font-medium text-slate-700">Display Pinyin Automatically</label>
                 <input type="checkbox" id="setting-pinyin" onchange="updateSettings()"
@@ -131,9 +150,10 @@
         // State initialization
         let appSettings = JSON.parse(localStorage.getItem('hsk_settings')) || {
             hsk: [1],
-            blocks: [1], // Track active sub-blocks for level 1
+            blocks: [1],
             showPinyin: true,
-            studyMode: "anki"
+            studyMode: "anki",
+            hiddenMode: false
         };
         let appProgress = JSON.parse(localStorage.getItem('hsk_progress')) || {};
         let currentCard = null;
@@ -147,30 +167,27 @@
 
                 document.getElementById('setting-pinyin').checked = appSettings.showPinyin;
                 document.getElementById('setting-study-mode').value = appSettings.studyMode || 'anki';
+                document.getElementById('setting-hidden-mode').checked = !!appSettings.hiddenMode;
                 
                 const filterBox = document.getElementById('hsk-filters');
                 filterBox.innerHTML = '';
 
-                // 1. Identify unique levels and blocks present in our dataset
+                // Identify unique levels and blocks present in our dataset
                 const uniqueLevels = [...new Set(HSK_DICTIONARY.map(item => item.level))];
 
                 uniqueLevels.forEach(lvl => {
-                    // Main Level Section Container
                     const levelSection = document.createElement('div');
                     levelSection.className = "col-span-3 border border-slate-100 p-4 rounded-2xl bg-slate-50/50 space-y-3";
 
-                    // Level Toggle Button Header
                     const lvlBtn = document.createElement('button');
                     lvlBtn.innerText = `Toggle All HSK ${lvl}`;
                     lvlBtn.className = `w-full p-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${appSettings.hsk.includes(lvl) ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs' : 'bg-white text-slate-500 border-slate-200'}`;
                     lvlBtn.onclick = () => toggleHskLevel(lvl);
                     levelSection.appendChild(lvlBtn);
 
-                    // Sub-grid layout container specifically for Blocks
                     const blocksGrid = document.createElement('div');
                     blocksGrid.className = "grid grid-cols-2 gap-2 mt-2";
 
-                    // Extract total number of blocks dynamically
                     const uniqueBlocks = [...new Set(HSK_DICTIONARY.filter(i => i.level === lvl).map(i => i.block))].sort((a, b) => a - b);
 
                     uniqueBlocks.forEach(blk => {
@@ -198,7 +215,6 @@
             if (!appSettings.blocks) appSettings.blocks = [];
 
             if (appSettings.blocks.includes(blockNum)) {
-                // Prevent turning off everything if it's the last block remaining
                 if (appSettings.blocks.length > 1) {
                     appSettings.blocks = appSettings.blocks.filter(b => b !== blockNum);
                 }
@@ -209,22 +225,19 @@
         }
 
         function toggleView(view) {
-            // 1. Reset all view visibilities
             document.getElementById('deck-view').classList.add('hidden');
             document.getElementById('list-view').classList.add('hidden');
             document.getElementById('settings-view').classList.add('hidden');
 
-            // Reset nav link active UI styling attributes
             document.getElementById('nav-deck').className = "px-3 py-1.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all cursor-pointer";
             document.getElementById('nav-list').className = "px-3 py-1.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all cursor-pointer";
 
-            // 2. Activate target element structures
             if (view === 'settings') {
                 document.getElementById('settings-view').classList.remove('hidden');
             } else if (view === 'list') {
                 document.getElementById('list-view').classList.remove('hidden');
                 document.getElementById('nav-list').className = "px-3 py-1.5 rounded-xl text-sm font-semibold bg-indigo-50 text-indigo-600 transition-all cursor-pointer";
-                renderListView(); // Fire rendering function execution
+                renderListView();
             } else {
                 document.getElementById('deck-view').classList.remove('hidden');
                 document.getElementById('nav-deck').className = "px-3 py-1.5 rounded-xl text-sm font-semibold bg-indigo-50 text-indigo-600 transition-all cursor-pointer";
@@ -233,7 +246,6 @@
         }
 
         function renderListView() {
-            // 1. Grab matching configuration subset pool
             let activeWords = HSK_DICTIONARY.filter(item =>
                 appSettings.hsk.includes(item.level) &&
                 (appSettings.blocks ? appSettings.blocks.includes(item.block) : true)
@@ -241,10 +253,8 @@
 
             document.getElementById('list-count').innerText = `${activeWords.length} Words`;
 
-            // 2. Map and Sort based on proficiency/score (Highest interval/repetitions first)
             const sortedWords = activeWords.map(word => {
                 const state = appProgress[word.id] || { repetition: 0, interval: 0, correct_count: 0, incorrect_count: 0 };
-                // Simple Mastery Score: Interval length combined with historical consistency ratio
                 const totalAnswers = state.correct_count + state.incorrect_count;
                 const accuracy = totalAnswers > 0 ? Math.round((state.correct_count / totalAnswers) * 100) : 0;
 
@@ -253,11 +263,10 @@
                     repetition: state.repetition,
                     interval: state.interval,
                     accuracy: accuracy,
-                    score: state.interval // Sorting index metric reference
+                    score: state.interval
                 };
-            }).sort((a, b) => b.score - a.score); // Descending order: mastered items stay at top
+            }).sort((a, b) => b.score - a.score);
 
-            // 3. Render items into DOM Container
             const container = document.getElementById('word-list-container');
             container.innerHTML = '';
 
@@ -270,10 +279,9 @@
                 const row = document.createElement('div');
                 row.className = "flex justify-between items-center bg-white border border-slate-200 p-3 rounded-xl shadow-2xs";
 
-                // Color flag indicator depending on mastery levels
-                let badgeColor = "bg-slate-100 text-slate-500"; // Unseen
-                if (word.interval > 7) badgeColor = "bg-emerald-100 text-emerald-800"; // Mastered
-                else if (word.interval > 0) badgeColor = "bg-amber-100 text-amber-800"; // Learning
+                let badgeColor = "bg-slate-100 text-slate-500";
+                if (word.interval > 7) badgeColor = "bg-emerald-100 text-emerald-800";
+                else if (word.interval > 0) badgeColor = "bg-amber-100 text-amber-800";
 
                 row.innerHTML = `
             <div class="flex items-center space-y-0.5">
@@ -306,17 +314,31 @@
         function updateSettings() {
             appSettings.showPinyin = document.getElementById('setting-pinyin').checked;
             appSettings.studyMode = document.getElementById('setting-study-mode').value;
+            appSettings.hiddenMode = document.getElementById('setting-hidden-mode').checked;
             
-            // Clear the practice queue whenever study options or groups modify
             practiceQueue = [];
 
             localStorage.setItem('hsk_settings', JSON.stringify(appSettings));
             init();
         }
 
-        // Spaced Repetition / Practice Scheduling Parser
+        // Fisher-Yates shuffle helper for robust options shuffling
+        function shuffle(array) {
+            let shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        // Reveal hidden options
+        function revealOptions() {
+            document.getElementById('reveal-container').classList.add('hidden');
+            document.getElementById('options-grid').classList.remove('hidden');
+        }
+
         function drawNextCard() {
-            // Filter by active HSK Level AND active Block numbers
             let pool = HSK_DICTIONARY.filter(item =>
                 appSettings.hsk.includes(item.level) &&
                 (appSettings.blocks ? appSettings.blocks.includes(item.block) : true)
@@ -326,21 +348,19 @@
                 document.getElementById('character-display').innerText = "📭";
                 document.getElementById('pinyin-display').innerText = "No active levels/blocks selected";
                 document.getElementById('options-grid').innerHTML = '';
+                document.getElementById('reveal-container').classList.add('hidden');
                 return;
             }
 
             // ==========================================
-            // BRANCH A: PRACTICE MODE (INFINITE LOOP QUEUE)
+            // BRANCH A: PRACTICE MODE
             // ==========================================
             if (appSettings.studyMode === "practice") {
-                // If our active queue is empty, refill it and shuffle
                 if (practiceQueue.length === 0) {
-                    practiceQueue = [...pool].sort(() => 0.5 - Math.random());
+                    practiceQueue = shuffle(pool);
                 }
 
-                // Prevent showing the exact same card twice in a row if the pool size is > 1
                 if (currentCard && practiceQueue.length > 1 && practiceQueue[0].id === currentCard.id) {
-                    // Push the matching card to the back of the queue
                     const duplicate = practiceQueue.shift();
                     practiceQueue.push(duplicate);
                 }
@@ -348,36 +368,32 @@
                 currentCard = practiceQueue.shift();
 
             // ==========================================
-            // BRANCH B: STANDARD ANKI MODE (DUE DATE FILTER)
+            // BRANCH B: ANKI MODE
             // ==========================================
             } else {
                 const now = new Date();
 
-                // Separate cards that are actually DUE or BRAND NEW
                 let duePool = pool.filter(item => {
                     const cardState = appProgress[item.id];
-                    if (!cardState || !cardState.next_review) {
-                        return true; // Brand new card!
-                    }
-                    const reviewDate = new Date(cardState.next_review);
-                    return reviewDate <= now;
+                    if (!cardState || !cardState.next_review) return true;
+                    return new Date(cardState.next_review) <= now;
                 });
 
-                // Handle a clear deck state (Zero-Inbox)
                 if (duePool.length === 0) {
                     document.getElementById('character-display').innerText = "🎉";
                     document.getElementById('pinyin-display').innerText = "All caught up for today!";
+                    document.getElementById('reveal-container').classList.add('hidden');
 
                     const grid = document.getElementById('options-grid');
+                    grid.classList.remove('hidden');
                     grid.innerHTML = `
                         <div class="text-center p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-medium text-sm">
-                            Your Anki deck is empty! Check back later when items are due, or switch to <strong>Practice Mode</strong> in Settings to study infinitely.
+                            Your Anki deck is empty! Check back later or switch to <strong>Practice Mode</strong> in Settings to study infinitely.
                         </div>
                     `;
                     return;
                 }
 
-                // Sort the due pool so the most overdue/new cards come first
                 duePool.sort((a, b) => {
                     const pA = appProgress[a.id];
                     const pB = appProgress[b.id];
@@ -393,11 +409,11 @@
             document.getElementById('character-display').innerText = currentCard.char;
             document.getElementById('pinyin-display').innerText = appSettings.showPinyin ? currentCard.pinyin : '';
 
-            // Generate Multiple Choice distractors from the full matching pool
+            // Generate Multiple Choice distractors
             let distractors = pool.filter(item => item.id !== currentCard.id);
-            distractors = distractors.sort(() => 0.5 - Math.random()).slice(0, 3);
+            distractors = shuffle(distractors).slice(0, 3);
 
-            let choices = [...distractors, currentCard].sort(() => 0.5 - Math.random());
+            let choices = shuffle([...distractors, currentCard]);
 
             const grid = document.getElementById('options-grid');
             grid.innerHTML = '';
@@ -408,6 +424,17 @@
                 btn.onclick = () => handleAnswer(choice.id === currentCard.id);
                 grid.appendChild(btn);
             });
+
+            // ==========================================
+            // HIDDEN MODE RENDERING HANDLER
+            // ==========================================
+            if (appSettings.hiddenMode) {
+                document.getElementById('reveal-container').classList.remove('hidden');
+                grid.classList.add('hidden'); // Keep options grid hidden initially
+            } else {
+                document.getElementById('reveal-container').classList.add('hidden');
+                grid.classList.remove('hidden'); // Show options immediately
+            }
         }
 
         function handleAnswer(isCorrect) {
@@ -421,7 +448,7 @@
             overlay.classList.add('flex');
 
             let score = 0;
-            if (isCorrect === null) { // Don't know
+            if (isCorrect === null) {
                 cardState.dont_know_count++;
                 score = 0;
                 overlay.innerText = `Don't Know 💡\n${currentCard.meaning}`;
@@ -438,7 +465,6 @@
                 overlay.classList.add('bg-rose-500');
             }
 
-            // Execute calculated updates via SM-2 properties
             if (score < 3) {
                 cardState.repetition = 0;
                 cardState.interval = 1;
@@ -454,11 +480,9 @@
             reviewDate.setDate(reviewDate.getDate() + cardState.interval);
             cardState.next_review = reviewDate.toISOString();
 
-            // Commit changes to runtime local state references
             appProgress[currentCard.id] = cardState;
             localStorage.setItem('hsk_progress', JSON.stringify(appProgress));
 
-            // Attempt immediate upstream database synchronization block
             syncData();
 
             setTimeout(() => {
@@ -488,7 +512,7 @@
                 }
                 checkAuthStatus();
                 syncData();
-                init(); // Refresh settings interface based on parsed values
+                init();
             } catch (err) {
                 alert(err.message);
             }
@@ -496,9 +520,8 @@
 
         async function syncData() {
             const token = localStorage.getItem('hsk_token');
-            if (!token) return; // Silent return for local mode
+            if (!token) return;
 
-            // Flatten map into database structural array payload
             const progressArray = Object.keys(appProgress).map(key => ({
                 char_id: key, ...appProgress[key]
             }));
@@ -514,7 +537,6 @@
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    // Normalize server structures into local dictionary definitions
                     data.progress.forEach(row => {
                         appProgress[row.char_id] = { ...row };
                     });
@@ -546,7 +568,8 @@
                 hsk: [1],
                 blocks: [1],
                 showPinyin: true,
-                studyMode: "anki"
+                studyMode: "anki",
+                hiddenMode: false
             };
             appProgress = {};
             checkAuthStatus();
