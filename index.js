@@ -21,12 +21,15 @@ export default {
       if (url.pathname === "/api/register" && method === "POST") {
         const { username, password } = await request.json();
         const userId = crypto.randomUUID();
-        // Simplified for brevity; use bcrypt/scrypt on production or WebCrypto API pbkdf2!
+        
+        // Save user settings with the default schema structure including studyMode
+        const defaultSettings = { hsk: [1], blocks: [1], showPinyin: true, studyMode: "anki" };
+        
         await env.DB.prepare("INSERT INTO users (id, username, password_hash, settings) VALUES (?, ?, ?, ?)")
-          .bind(userId, username, password, JSON.stringify({ hsk: [1], showPinyin: true })).run();
+          .bind(userId, username, password, JSON.stringify(defaultSettings)).run();
         
         const token = await new SignJWT({ userId }).setProtectedHeader({ alg: 'HS256' }).sign(SECRET);
-        return new Response(JSON.stringify({ token }), { headers: corsHeaders });
+        return new Response(JSON.stringify({ token, settings: defaultSettings }), { headers: corsHeaders });
       }
 
       if (url.pathname === "/api/login" && method === "POST") {
@@ -52,7 +55,7 @@ export default {
       if (url.pathname === "/api/sync" && method === "POST") {
         const { progress, settings } = await request.json();
         
-        // Save settings
+        // Save configuration parameters
         await env.DB.prepare("UPDATE users SET settings = ? WHERE id = ?").bind(JSON.stringify(settings), userId).run();
         
         // Save batch vocabulary progress updates
@@ -77,4 +80,3 @@ export default {
     }
   }
 };
-

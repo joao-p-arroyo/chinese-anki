@@ -50,7 +50,7 @@
                 <div id="options-grid" class="grid grid-cols-1 gap-3">
                 </div>
                 <button onclick="handleAnswer(null)"
-                    class="w-full py-3 bg-slate-200 text-slate-700 font-semibold rounded-xl text-center active:scale-[0.98] transition-transform">
+                    class="w-full py-3 bg-slate-200 text-slate-700 font-semibold rounded-xl text-center active:scale-[0.98] transition-transform cursor-pointer">
                     Don't Know (不知道)
                 </button>
             </div>
@@ -70,7 +70,7 @@
             class="hidden w-full bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
             <div class="flex justify-between items-center border-b pb-3">
                 <h2 class="text-lg font-bold">Preferences & Cloud Auth</h2>
-                <button onclick="toggleView('deck')" class="text-sm font-semibold text-indigo-600">Done</button>
+                <button onclick="toggleView('deck')" class="text-sm font-semibold text-indigo-600 cursor-pointer">Done</button>
             </div>
 
             <div id="auth-section" class="space-y-3">
@@ -82,23 +82,34 @@
                         class="w-full border p-2.5 rounded-xl text-sm">
                     <div class="grid grid-cols-2 gap-2">
                         <button onclick="auth('login')"
-                            class="bg-indigo-600 text-white p-2 rounded-xl text-sm font-medium">Login</button>
+                            class="bg-indigo-600 text-white p-2 rounded-xl text-sm font-medium cursor-pointer">Login</button>
                         <button onclick="auth('register')"
-                            class="bg-slate-100 text-slate-700 p-2 rounded-xl text-sm font-medium border">Create
+                            class="bg-slate-100 text-slate-700 p-2 rounded-xl text-sm font-medium border cursor-pointer">Create
                             Account</button>
                     </div>
                 </div>
                 <div id="logged-in-status"
                     class="hidden flex justify-between items-center bg-emerald-50 text-emerald-800 p-3 rounded-xl border border-emerald-200 text-sm">
                     <span>Logged in as: <strong id="user-display"></strong></span>
-                    <button onclick="logout()" class="text-red-600 font-bold underline">Logout</button>
+                    <button onclick="logout()" class="text-red-600 font-bold underline cursor-pointer">Logout</button>
                 </div>
+            </div>
+
+            <div class="flex justify-between items-center border-b pb-4">
+                <div>
+                    <label class="text-sm font-semibold text-slate-700 block">Study Mode</label>
+                    <span class="text-xs text-slate-400">Anki (Spaced Repetition) vs. Practice (Infinite Loop)</span>
+                </div>
+                <select id="setting-study-mode" onchange="updateSettings()" class="border p-2 rounded-xl text-sm bg-slate-50 font-medium cursor-pointer">
+                    <option value="anki">Anki Mode</option>
+                    <option value="practice">Practice Mode</option>
+                </select>
             </div>
 
             <div class="flex justify-between items-center">
                 <label class="text-sm font-medium text-slate-700">Display Pinyin Automatically</label>
                 <input type="checkbox" id="setting-pinyin" onchange="updateSettings()"
-                    class="w-5 h-5 accent-indigo-600">
+                    class="w-5 h-5 accent-indigo-600 cursor-pointer">
             </div>
 
             <div class="space-y-2">
@@ -121,10 +132,12 @@
         let appSettings = JSON.parse(localStorage.getItem('hsk_settings')) || {
             hsk: [1],
             blocks: [1], // Track active sub-blocks for level 1
-            showPinyin: true
+            showPinyin: true,
+            studyMode: "anki"
         };
         let appProgress = JSON.parse(localStorage.getItem('hsk_progress')) || {};
         let currentCard = null;
+        let practiceQueue = [];
 
         async function init() {
             try {
@@ -133,6 +146,8 @@
                 HSK_DICTIONARY = await response.json();
 
                 document.getElementById('setting-pinyin').checked = appSettings.showPinyin;
+                document.getElementById('setting-study-mode').value = appSettings.studyMode || 'anki';
+                
                 const filterBox = document.getElementById('hsk-filters');
                 filterBox.innerHTML = '';
 
@@ -147,7 +162,7 @@
                     // Level Toggle Button Header
                     const lvlBtn = document.createElement('button');
                     lvlBtn.innerText = `Toggle All HSK ${lvl}`;
-                    lvlBtn.className = `w-full p-2.5 rounded-xl text-xs font-bold border transition-all ${appSettings.hsk.includes(lvl) ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs' : 'bg-white text-slate-500 border-slate-200'}`;
+                    lvlBtn.className = `w-full p-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${appSettings.hsk.includes(lvl) ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs' : 'bg-white text-slate-500 border-slate-200'}`;
                     lvlBtn.onclick = () => toggleHskLevel(lvl);
                     levelSection.appendChild(lvlBtn);
 
@@ -161,7 +176,7 @@
                     uniqueBlocks.forEach(blk => {
                         const blkBtn = document.createElement('button');
                         blkBtn.innerText = `Block ${blk} (Words ${(blk - 1) * 30 + 1}-${Math.min(blk * 30, HSK_DICTIONARY.filter(i => i.block === blk).length + (blk - 1) * 30)})`;
-                        blkBtn.className = `p-2 rounded-xl text-center text-[11px] font-medium border transition-all ${appSettings.blocks?.includes(blk) && appSettings.hsk.includes(lvl) ? 'bg-emerald-100 border-emerald-400 text-emerald-800' : 'bg-white text-slate-400 border-slate-200'}`;
+                        blkBtn.className = `p-2 rounded-xl text-center text-[11px] font-medium border transition-all cursor-pointer ${appSettings.blocks?.includes(blk) && appSettings.hsk.includes(lvl) ? 'bg-emerald-100 border-emerald-400 text-emerald-800' : 'bg-white text-slate-400 border-slate-200'}`;
                         blkBtn.onclick = () => toggleBlock(blk);
                         blocksGrid.appendChild(blkBtn);
                     });
@@ -200,19 +215,19 @@
             document.getElementById('settings-view').classList.add('hidden');
 
             // Reset nav link active UI styling attributes
-            document.getElementById('nav-deck').className = "px-3 py-1.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all";
-            document.getElementById('nav-list').className = "px-3 py-1.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all";
+            document.getElementById('nav-deck').className = "px-3 py-1.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all cursor-pointer";
+            document.getElementById('nav-list').className = "px-3 py-1.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all cursor-pointer";
 
             // 2. Activate target element structures
             if (view === 'settings') {
                 document.getElementById('settings-view').classList.remove('hidden');
             } else if (view === 'list') {
                 document.getElementById('list-view').classList.remove('hidden');
-                document.getElementById('nav-list').className = "px-3 py-1.5 rounded-xl text-sm font-semibold bg-indigo-50 text-indigo-600 transition-all";
+                document.getElementById('nav-list').className = "px-3 py-1.5 rounded-xl text-sm font-semibold bg-indigo-50 text-indigo-600 transition-all cursor-pointer";
                 renderListView(); // Fire rendering function execution
             } else {
                 document.getElementById('deck-view').classList.remove('hidden');
-                document.getElementById('nav-deck').className = "px-3 py-1.5 rounded-xl text-sm font-semibold bg-indigo-50 text-indigo-600 transition-all";
+                document.getElementById('nav-deck').className = "px-3 py-1.5 rounded-xl text-sm font-semibold bg-indigo-50 text-indigo-600 transition-all cursor-pointer";
                 drawNextCard();
             }
         }
@@ -290,13 +305,18 @@
 
         function updateSettings() {
             appSettings.showPinyin = document.getElementById('setting-pinyin').checked;
+            appSettings.studyMode = document.getElementById('setting-study-mode').value;
+            
+            // Clear the practice queue whenever study options or groups modify
+            practiceQueue = [];
+
             localStorage.setItem('hsk_settings', JSON.stringify(appSettings));
             init();
         }
 
-        // Spaced Repetition Scheduling Parser
+        // Spaced Repetition / Practice Scheduling Parser
         function drawNextCard() {
-            // UPDATED FILTER: Filter by active HSK Level AND active Block numbers
+            // Filter by active HSK Level AND active Block numbers
             let pool = HSK_DICTIONARY.filter(item =>
                 appSettings.hsk.includes(item.level) &&
                 (appSettings.blocks ? appSettings.blocks.includes(item.block) : true)
@@ -309,50 +329,72 @@
                 return;
             }
 
-            const now = new Date();
-
-            // 2. Strict Anki Filter: Separate cards that are actually DUE or BRAND NEW
-            let duePool = pool.filter(item => {
-                const cardState = appProgress[item.id];
-                if (!cardState || !cardState.next_review) {
-                    return true; // Brand new card! Never reviewed, so it is due now.
+            // ==========================================
+            // BRANCH A: PRACTICE MODE (INFINITE LOOP QUEUE)
+            // ==========================================
+            if (appSettings.studyMode === "practice") {
+                // If our active queue is empty, refill it and shuffle
+                if (practiceQueue.length === 0) {
+                    practiceQueue = [...pool].sort(() => 0.5 - Math.random());
                 }
-                const reviewDate = new Date(cardState.next_review);
-                return reviewDate <= now; // Only include if the review time has passed or is right now
-            });
 
-            // 3. Handle a clear deck state (Zero-Inbox)
-            if (duePool.length === 0) {
-                document.getElementById('character-display').innerText = "🎉";
-                document.getElementById('pinyin-display').innerText = "All caught up for today!";
+                // Prevent showing the exact same card twice in a row if the pool size is > 1
+                if (currentCard && practiceQueue.length > 1 && practiceQueue[0].id === currentCard.id) {
+                    // Push the matching card to the back of the queue
+                    const duplicate = practiceQueue.shift();
+                    practiceQueue.push(duplicate);
+                }
 
-                const grid = document.getElementById('options-grid');
-                grid.innerHTML = `
-      <div class="text-center p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-medium text-sm">
-        Your Anki deck is empty! Check back later when items are due, or add higher HSK levels in Settings.
-      </div>
-    `;
-                return;
+                currentCard = practiceQueue.shift();
+
+            // ==========================================
+            // BRANCH B: STANDARD ANKI MODE (DUE DATE FILTER)
+            // ==========================================
+            } else {
+                const now = new Date();
+
+                // Separate cards that are actually DUE or BRAND NEW
+                let duePool = pool.filter(item => {
+                    const cardState = appProgress[item.id];
+                    if (!cardState || !cardState.next_review) {
+                        return true; // Brand new card!
+                    }
+                    const reviewDate = new Date(cardState.next_review);
+                    return reviewDate <= now;
+                });
+
+                // Handle a clear deck state (Zero-Inbox)
+                if (duePool.length === 0) {
+                    document.getElementById('character-display').innerText = "🎉";
+                    document.getElementById('pinyin-display').innerText = "All caught up for today!";
+
+                    const grid = document.getElementById('options-grid');
+                    grid.innerHTML = `
+                        <div class="text-center p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-medium text-sm">
+                            Your Anki deck is empty! Check back later when items are due, or switch to <strong>Practice Mode</strong> in Settings to study infinitely.
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Sort the due pool so the most overdue/new cards come first
+                duePool.sort((a, b) => {
+                    const pA = appProgress[a.id];
+                    const pB = appProgress[b.id];
+                    const nextA = pA ? new Date(pA.next_review) : new Date(0);
+                    const nextB = pB ? new Date(pB.next_review) : new Date(0);
+                    return nextA - nextB;
+                });
+
+                currentCard = duePool[0];
             }
-
-            // 4. Sort the due pool so the most overdue/new cards come first
-            duePool.sort((a, b) => {
-                const pA = appProgress[a.id];
-                const pB = appProgress[b.id];
-                const nextA = pA ? new Date(pA.next_review) : new Date(0);
-                const nextB = pB ? new Date(pB.next_review) : new Date(0);
-                return nextA - nextB;
-            });
-
-            // Pick the absolute highest priority due card
-            currentCard = duePool[0];
 
             // --- RENDER CURRENT CARD ---
             document.getElementById('character-display').innerText = currentCard.char;
             document.getElementById('pinyin-display').innerText = appSettings.showPinyin ? currentCard.pinyin : '';
 
-            // 5. Generate Multiple Choice distractors from the full matching HSK level pool
-            let distractors = HSK_DICTIONARY.filter(item => item.id !== currentCard.id);
+            // Generate Multiple Choice distractors from the full matching pool
+            let distractors = pool.filter(item => item.id !== currentCard.id);
             distractors = distractors.sort(() => 0.5 - Math.random()).slice(0, 3);
 
             let choices = [...distractors, currentCard].sort(() => 0.5 - Math.random());
@@ -440,9 +482,13 @@
                 const data = await res.json();
                 localStorage.setItem('hsk_token', data.token);
                 localStorage.setItem('hsk_username', username);
-                if (data.settings) appSettings = data.settings;
+                if (data.settings) {
+                    appSettings = data.settings;
+                    localStorage.setItem('hsk_settings', JSON.stringify(appSettings));
+                }
                 checkAuthStatus();
                 syncData();
+                init(); // Refresh settings interface based on parsed values
             } catch (err) {
                 alert(err.message);
             }
@@ -494,7 +540,17 @@
         function logout() {
             localStorage.removeItem('hsk_token');
             localStorage.removeItem('hsk_username');
+            localStorage.removeItem('hsk_settings');
+            localStorage.removeItem('hsk_progress');
+            appSettings = {
+                hsk: [1],
+                blocks: [1],
+                showPinyin: true,
+                studyMode: "anki"
+            };
+            appProgress = {};
             checkAuthStatus();
+            init();
         }
 
         window.onload = init;
@@ -502,6 +558,3 @@
 </body>
 
 </html>
-
-
-
