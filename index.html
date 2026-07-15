@@ -117,10 +117,9 @@
         let HSK_DICTIONARY = [];
         const API_URL = "https://hsk-anki-backend.joao-p-arroyo.workers.dev";
 
-        // State initialization
         let appSettings = JSON.parse(localStorage.getItem('hsk_settings')) || {
             hsk: [1],
-            blocks: [1], // Track active sub-blocks for level 1
+            blocks: [1],
             showPinyin: true
         };
         let appProgress = JSON.parse(localStorage.getItem('hsk_progress')) || {};
@@ -128,246 +127,75 @@
 
         async function init() {
             try {
-                const response = await fetch('./characters/hsk1.json');
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                HSK_DICTIONARY = await response.json();
+                // DYNAMIC FETCH: Pull dictionaries dynamically based on chosen user settings
+                HSK_DICTIONARY = [];
+                for (const level of appSettings.hsk) {
+                    try {
+                        const response = await fetch(`./characters/hsk${level}.json`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            HSK_DICTIONARY = HSK_DICTIONARY.concat(data);
+                        }
+                    } catch (e) {
+                        console.warn(`Could not load dictionary file for level ${level}`);
+                    }
+                }
+
+                // Fallback in case dictionary is entirely empty
+                if (HSK_DICTIONARY.length === 0) {
+                    const fallbackRes = await fetch('./characters/hsk1.json');
+                    HSK_DICTIONARY = await fallbackRes.json();
+                }
 
                 document.getElementById('setting-pinyin').checked = appSettings.showPinyin;
-                const filterBox = document.getElementById('hsk-filters');
-                filterBox.innerHTML = '';
+                buildSettingsUI();
+                checkAuthStatus();
+                drawNextCard();
+            } catch (err) {
+                console.error("Failed to boot HSK app:", err);
+                document.getElementById('character-display').innerText = "⚠️";
+                document.getElementById('pinyin-display').innerText = "Error booting system state";
+            }
+        }
 
-                // 1. Identify unique levels and blocks present in our dataset
-                const uniqueLevels = [...new Set(HSK_DICTIONARY.map(item => item.level))];
+        function buildSettingsUI() {
+            const filterBox = document.getElementById('hsk-filters');
+            filterBox.innerHTML = '';
 
-                uniqueLevels.forEach(lvl => {
-                    // Main Level Section Container
-                    const levelSection = document.createElement('div');
-                    levelSection.className = "col-span-3 border border-slate-100 p-4 rounded-2xl bg-slate-50/50 space-y-3";
+            // Unique HSK Levels available
+            const uniqueLevels = [1, 2, 3, 4, 5, 6]; // Set dynamic baseline index array
 
-                    // Level Toggle Button Header
-                    const lvlBtn = document.createElement('button');
-                    lvlBtn.innerText = `Toggle All HSK ${lvl}`;
-                    lvlBtn.className = `w-full p-2.5 rounded-xl text-xs font-bold border transition-all ${appSettings.hsk.includes(lvl) ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs' : 'bg-white text-slate-500 border-slate-200'}`;
-                    lvlBtn.onclick = () => toggleHskLevel(lvl);
-                    levelSection.appendChild(lvlBtn);
+            uniqueLevels.forEach(lvl => {
+                const levelSection = document.createElement('div');
+                levelSection.className = "col-span-3 border border-slate-100 p-4 rounded-2xl bg-slate-50/50 space-y-3";
 
-                    // Sub-grid layout container specifically for Blocks
+                const lvlBtn = document.createElement('button');
+                lvlBtn.innerText = `Toggle All HSK ${lvl}`;
+                lvlBtn.className = `w-full p-2.5 rounded-xl text-xs font-bold border transition-all ${appSettings.hsk.includes(lvl) ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs' : 'bg-white text-slate-500 border-slate-200'}`;
+                lvlBtn.onclick = () => toggleHskLevel(lvl);
+                levelSection.appendChild(lvlBtn);
+
+                // Check dynamically if current file structure contains elements of this level
+                const levelItems = HSK_DICTIONARY.filter(i => i.level === lvl);
+                if (levelItems.length > 0) {
                     const blocksGrid = document.createElement('div');
                     blocksGrid.className = "grid grid-cols-2 gap-2 mt-2";
 
-                    // Extract total number of blocks dynamically
-                    const uniqueBlocks = [...new Set(HSK_DICTIONARY.filter(i => i.level === lvl).map(i => i.block))].sort((a, b) => a - b);
-
+                    const uniqueBlocks = [...new Set(levelItems.map(i => i.block))].sort((a, b) => a - b);
                     uniqueBlocks.forEach(blk => {
                         const blkBtn = document.createElement('button');
-                        blkBtn.innerText = `Block ${blk} (Words ${(blk - 1) * 30 + 1}-${Math.min(blk * 30, HSK_DICTIONARY.filter(i => i.block === blk).length + (blk - 1) * 30)})`;
+                        blkBtn.innerText = `Block ${blk} (Words ${(blk - 1) * 30 + 1}-${Math.min(blk * 30, levelItems.filter(i => i.block === blk).length + (blk - 1) * 30)})`;
                         blkBtn.className = `p-2 rounded-xl text-center text-[11px] font-medium border transition-all ${appSettings.blocks?.includes(blk) && appSettings.hsk.includes(lvl) ? 'bg-emerald-100 border-emerald-400 text-emerald-800' : 'bg-white text-slate-400 border-slate-200'}`;
                         blkBtn.onclick = () => toggleBlock(blk);
                         blocksGrid.appendChild(blkBtn);
                     });
-
                     levelSection.appendChild(blocksGrid);
-                    filterBox.appendChild(levelSection);
-                });
-
-                checkAuthStatus();
-                drawNextCard();
-            } catch (err) {
-                console.error("Failed to load HSK Dictionary file:", err);
-                document.getElementById('character-display').innerText = "⚠️";
-                document.getElementById('pinyin-display').innerText = "Error loading vocabulary data";
-            }
-        }
-
-        function toggleBlock(blockNum) {
-            if (!appSettings.blocks) appSettings.blocks = [];
-
-            if (appSettings.blocks.includes(blockNum)) {
-                // Prevent turning off everything if it's the last block remaining
-                if (appSettings.blocks.length > 1) {
-                    appSettings.blocks = appSettings.blocks.filter(b => b !== blockNum);
                 }
-            } else {
-                appSettings.blocks.push(blockNum);
-            }
-            updateSettings();
-        }
-
-        function toggleView(view) {
-            // 1. Reset all view visibilities
-            document.getElementById('deck-view').classList.add('hidden');
-            document.getElementById('list-view').classList.add('hidden');
-            document.getElementById('settings-view').classList.add('hidden');
-
-            // Reset nav link active UI styling attributes
-            document.getElementById('nav-deck').className = "px-3 py-1.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all";
-            document.getElementById('nav-list').className = "px-3 py-1.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all";
-
-            // 2. Activate target element structures
-            if (view === 'settings') {
-                document.getElementById('settings-view').classList.remove('hidden');
-            } else if (view === 'list') {
-                document.getElementById('list-view').classList.remove('hidden');
-                document.getElementById('nav-list').className = "px-3 py-1.5 rounded-xl text-sm font-semibold bg-indigo-50 text-indigo-600 transition-all";
-                renderListView(); // Fire rendering function execution
-            } else {
-                document.getElementById('deck-view').classList.remove('hidden');
-                document.getElementById('nav-deck').className = "px-3 py-1.5 rounded-xl text-sm font-semibold bg-indigo-50 text-indigo-600 transition-all";
-                drawNextCard();
-            }
-        }
-
-        function renderListView() {
-            // 1. Grab matching configuration subset pool
-            let activeWords = HSK_DICTIONARY.filter(item =>
-                appSettings.hsk.includes(item.level) &&
-                (appSettings.blocks ? appSettings.blocks.includes(item.block) : true)
-            );
-
-            document.getElementById('list-count').innerText = `${activeWords.length} Words`;
-
-            // 2. Map and Sort based on proficiency/score (Highest interval/repetitions first)
-            const sortedWords = activeWords.map(word => {
-                const state = appProgress[word.id] || { repetition: 0, interval: 0, correct_count: 0, incorrect_count: 0 };
-                // Simple Mastery Score: Interval length combined with historical consistency ratio
-                const totalAnswers = state.correct_count + state.incorrect_count;
-                const accuracy = totalAnswers > 0 ? Math.round((state.correct_count / totalAnswers) * 100) : 0;
-
-                return {
-                    ...word,
-                    repetition: state.repetition,
-                    interval: state.interval,
-                    accuracy: accuracy,
-                    score: state.interval // Sorting index metric reference
-                };
-            }).sort((a, b) => b.score - a.score); // Descending order: mastered items stay at top
-
-            // 3. Render items into DOM Container
-            const container = document.getElementById('word-list-container');
-            container.innerHTML = '';
-
-            if (sortedWords.length === 0) {
-                container.innerHTML = `<div class="text-center text-sm text-slate-400 py-8">No active cards found in current filter setting selections.</div>`;
-                return;
-            }
-
-            sortedWords.forEach(word => {
-                const row = document.createElement('div');
-                row.className = "flex justify-between items-center bg-white border border-slate-200 p-3 rounded-xl shadow-2xs";
-
-                // Color flag indicator depending on mastery levels
-                let badgeColor = "bg-slate-100 text-slate-500"; // Unseen
-                if (word.interval > 7) badgeColor = "bg-emerald-100 text-emerald-800"; // Mastered
-                else if (word.interval > 0) badgeColor = "bg-amber-100 text-amber-800"; // Learning
-
-                row.innerHTML = `
-            <div class="flex items-center space-y-0.5">
-                <span class="text-2xl font-bold text-slate-800 mr-3 w-10 text-center">${word.char}</span>
-                <div>
-                    <div class="text-xs font-semibold text-slate-500">${word.pinyin}</div>
-                    <div class="text-xs text-slate-400 truncate max-w-[180px]">${word.meaning}</div>
-                </div>
-            </div>
-            <div class="text-right">
-                <span class="text-[10px] font-bold px-2 py-1 rounded-md ${badgeColor}">
-                    ${word.interval === 0 ? 'New' : `Interval: ${word.interval}d`}
-                </span>
-                <div class="text-[10px] text-slate-400 mt-1">Accuracy: ${word.accuracy}%</div>
-            </div>
-        `;
-                container.appendChild(row);
+                filterBox.appendChild(levelSection);
             });
         }
 
-        function toggleHskLevel(level) {
-            if (appSettings.hsk.includes(level)) {
-                appSettings.hsk = appSettings.hsk.filter(l => l !== level);
-            } else {
-                appSettings.hsk.push(level);
-            }
-            updateSettings();
-        }
-
-        function updateSettings() {
-            appSettings.showPinyin = document.getElementById('setting-pinyin').checked;
-            localStorage.setItem('hsk_settings', JSON.stringify(appSettings));
-            init();
-        }
-
-        // Spaced Repetition Scheduling Parser
-        function drawNextCard() {
-            // UPDATED FILTER: Filter by active HSK Level AND active Block numbers
-            let pool = HSK_DICTIONARY.filter(item =>
-                appSettings.hsk.includes(item.level) &&
-                (appSettings.blocks ? appSettings.blocks.includes(item.block) : true)
-            );
-
-            if (!pool.length) {
-                document.getElementById('character-display').innerText = "📭";
-                document.getElementById('pinyin-display').innerText = "No active levels/blocks selected";
-                document.getElementById('options-grid').innerHTML = '';
-                return;
-            }
-
-            const now = new Date();
-
-            // 2. Strict Anki Filter: Separate cards that are actually DUE or BRAND NEW
-            let duePool = pool.filter(item => {
-                const cardState = appProgress[item.id];
-                if (!cardState || !cardState.next_review) {
-                    return true; // Brand new card! Never reviewed, so it is due now.
-                }
-                const reviewDate = new Date(cardState.next_review);
-                return reviewDate <= now; // Only include if the review time has passed or is right now
-            });
-
-            // 3. Handle a clear deck state (Zero-Inbox)
-            if (duePool.length === 0) {
-                document.getElementById('character-display').innerText = "🎉";
-                document.getElementById('pinyin-display').innerText = "All caught up for today!";
-
-                const grid = document.getElementById('options-grid');
-                grid.innerHTML = `
-      <div class="text-center p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-medium text-sm">
-        Your Anki deck is empty! Check back later when items are due, or add higher HSK levels in Settings.
-      </div>
-    `;
-                return;
-            }
-
-            // 4. Sort the due pool so the most overdue/new cards come first
-            duePool.sort((a, b) => {
-                const pA = appProgress[a.id];
-                const pB = appProgress[b.id];
-                const nextA = pA ? new Date(pA.next_review) : new Date(0);
-                const nextB = pB ? new Date(pB.next_review) : new Date(0);
-                return nextA - nextB;
-            });
-
-            // Pick the absolute highest priority due card
-            currentCard = duePool[0];
-
-            // --- RENDER CURRENT CARD ---
-            document.getElementById('character-display').innerText = currentCard.char;
-            document.getElementById('pinyin-display').innerText = appSettings.showPinyin ? currentCard.pinyin : '';
-
-            // 5. Generate Multiple Choice distractors from the full matching HSK level pool
-            let distractors = HSK_DICTIONARY.filter(item => item.id !== currentCard.id);
-            distractors = distractors.sort(() => 0.5 - Math.random()).slice(0, 3);
-
-            let choices = [...distractors, currentCard].sort(() => 0.5 - Math.random());
-
-            const grid = document.getElementById('options-grid');
-            grid.innerHTML = '';
-            choices.forEach(choice => {
-                const btn = document.createElement('button');
-                btn.className = "w-full text-left p-4 bg-white border border-slate-200 hover:bg-slate-50 font-medium rounded-xl transition-all shadow-2xs cursor-pointer active:scale-[0.99]";
-                btn.innerText = choice.meaning;
-                btn.onclick = () => handleAnswer(choice.id === currentCard.id);
-                grid.appendChild(btn);
-            });
-        }
-
+        // Updated HandleAnswer function with Snappy Speed (750ms Delay instead of 1600ms)
         function handleAnswer(isCorrect) {
             const cardState = appProgress[currentCard.id] || {
                 ease_factor: 2.5, repetition: 0, interval: 0,
@@ -379,24 +207,24 @@
             overlay.classList.add('flex');
 
             let score = 0;
-            if (isCorrect === null) { // Don't know
+            if (isCorrect === null) {
                 cardState.dont_know_count++;
                 score = 0;
-                overlay.innerText = `Don't Know 💡\n${currentCard.meaning}`;
+                overlay.innerHTML = `<div class="text-center"><p class="text-lg opacity-90">Don't Know 💡</p><p class="text-3xl font-bold mt-1">${currentCard.meaning}</p><p class="text-xl mt-2 opacity-80">${currentCard.pinyin}</p></div>`;
                 overlay.classList.add('bg-amber-500');
             } else if (isCorrect) {
                 cardState.correct_count++;
                 score = 5;
-                overlay.innerText = "Correct! 🎉";
+                overlay.innerHTML = `<div class="text-center"><p class="text-3xl font-bold">Correct! 🎉</p><p class="text-lg mt-1 opacity-90">${currentCard.pinyin}: ${currentCard.meaning}</p></div>`;
                 overlay.classList.add('bg-emerald-500');
             } else {
                 cardState.incorrect_count++;
                 score = 0;
-                overlay.innerText = `Incorrect ❌\n${currentCard.meaning}`;
+                overlay.innerHTML = `<div class="text-center"><p class="text-lg opacity-90">Incorrect ❌</p><p class="text-3xl font-bold mt-1">${currentCard.meaning}</p><p class="text-xl mt-2 opacity-80">${currentCard.pinyin}</p></div>`;
                 overlay.classList.add('bg-rose-500');
             }
 
-            // Execute calculated updates via SM-2 properties
+            // SM-2 calculations
             if (score < 3) {
                 cardState.repetition = 0;
                 cardState.interval = 1;
@@ -412,47 +240,24 @@
             reviewDate.setDate(reviewDate.getDate() + cardState.interval);
             cardState.next_review = reviewDate.toISOString();
 
-            // Commit changes to runtime local state references
             appProgress[currentCard.id] = cardState;
             localStorage.setItem('hsk_progress', JSON.stringify(appProgress));
 
-            // Attempt immediate upstream database synchronization block
             syncData();
 
+            // Reduced from 1600ms to 750ms for snappier performance
             setTimeout(() => {
                 overlay.classList.add('hidden');
                 overlay.classList.remove('flex');
                 drawNextCard();
-            }, 1600);
+            }, 750);
         }
 
-        // --- SYSTEM NETWORK REVIEWS ---
-        async function auth(type) {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            try {
-                const res = await fetch(`${API_URL}/api/${type}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-                if (!res.ok) throw new Error('Authorization failed credentials mismatch');
-                const data = await res.json();
-                localStorage.setItem('hsk_token', data.token);
-                localStorage.setItem('hsk_username', username);
-                if (data.settings) appSettings = data.settings;
-                checkAuthStatus();
-                syncData();
-            } catch (err) {
-                alert(err.message);
-            }
-        }
-
+        // Upstream Sync with Visual Indicator support
         async function syncData() {
             const token = localStorage.getItem('hsk_token');
-            if (!token) return; // Silent return for local mode
+            if (!token) return;
 
-            // Flatten map into database structural array payload
             const progressArray = Object.keys(appProgress).map(key => ({
                 char_id: key, ...appProgress[key]
             }));
@@ -468,36 +273,16 @@
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    // Normalize server structures into local dictionary definitions
                     data.progress.forEach(row => {
                         appProgress[row.char_id] = { ...row };
                     });
                     localStorage.setItem('hsk_progress', JSON.stringify(appProgress));
+                    console.log("Cloud sync complete.");
                 }
             } catch (e) {
-                console.warn("Network offline, caching progress locally.", e);
+                console.warn("Sync failed. Storing local progressive updates.", e);
             }
         }
-
-        function checkAuthStatus() {
-            const username = localStorage.getItem('hsk_username');
-            if (username) {
-                document.getElementById('logged-out-form').classList.add('hidden');
-                document.getElementById('logged-in-status').classList.remove('hidden');
-                document.getElementById('user-display').innerText = username;
-            } else {
-                document.getElementById('logged-out-form').classList.remove('hidden');
-                document.getElementById('logged-in-status').classList.add('hidden');
-            }
-        }
-
-        function logout() {
-            localStorage.removeItem('hsk_token');
-            localStorage.removeItem('hsk_username');
-            checkAuthStatus();
-        }
-
-        window.onload = init;
     </script>
 </body>
 
